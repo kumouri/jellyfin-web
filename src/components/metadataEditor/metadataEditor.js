@@ -186,6 +186,7 @@ function onSubmit(e) {
         const placeOfBirth = form.querySelector('#txtPlaceOfBirth').value;
 
         item.ProductionLocations = placeOfBirth ? [placeOfBirth] : [];
+        item.Aliases = getListValues(form.querySelector('#listAliases'));
     }
 
     if (currentItem.Type === 'Series') {
@@ -232,7 +233,7 @@ function removeElementFromList(source) {
 
 function editPerson(context, person, index) {
     import('./personEditor').then(({ default: personEditor }) => {
-        personEditor.show(person).then(function (updatedPerson) {
+        personEditor.show(person, getApiClient()).then(function (updatedPerson) {
             const isNew = index === -1;
 
             if (isNew) {
@@ -317,6 +318,7 @@ function onResetClick() {
     form.querySelector('#listGenres').innerHTML = '';
     form.querySelector('#listTags').innerHTML = '';
     form.querySelector('#listStudios').innerHTML = '';
+    form.querySelector('#listAliases').innerHTML = '';
     form.querySelector('#peopleList').innerHTML = '';
     currentItem.People = [];
 
@@ -673,11 +675,13 @@ function setFieldVisibilities(context, item) {
         context.querySelector('#txtPremiereDate').label(globalize.translate('LabelBirthDate'));
         context.querySelector('#txtEndDate').label(globalize.translate('LabelDeathDate'));
         showElement('#fldPlaceOfBirth');
+        showElement('#aliasesCollapsible');
     } else {
         context.querySelector('#txtProductionYear').label(globalize.translate('LabelYear'));
         context.querySelector('#txtPremiereDate').label(globalize.translate('LabelReleaseDate'));
         context.querySelector('#txtEndDate').label(globalize.translate('LabelEndDate'));
         hideElement('#fldPlaceOfBirth');
+        hideElement('#aliasesCollapsible');
     }
 
     if (item.MediaType === 'Video' && item.Type === 'TvChannel') {
@@ -782,6 +786,7 @@ function fillItemInfo(context, item, parentalRatingOptions) {
     }));
 
     populateListView(context.querySelector('#listTags'), item.Tags);
+    populateListView(context.querySelector('#listAliases'), item.Aliases || []);
 
     const lockData = (item.LockData || false);
     const chkLockData = context.querySelector('#chkLockData');
