@@ -10,14 +10,22 @@ import './searchfields.scss';
 
 interface SearchFieldsProps {
     query: string,
-    onSearch?: (query: string) => void
+    onSearch?: (query: string) => void,
+    isRegex?: boolean,
+    onRegexChange?: (isRegex: boolean) => void
 }
 
 const SearchFields: FC<SearchFieldsProps> = ({
     onSearch = () => { /* no-op */ },
-    query
+    query,
+    isRegex = false,
+    onRegexChange = () => { /* no-op */ }
 }) => {
     const inputRef = useRef<HTMLInputElement>(null);
+
+    const onRegexToggle = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+        onRegexChange(e.target.checked);
+    }, [ onRegexChange ]);
 
     const onAlphaPicked = useCallback((e: Event) => {
         const value = (e as CustomEvent).detail.value;
@@ -50,13 +58,23 @@ const SearchFields: FC<SearchFieldsProps> = ({
                         data-keyboard='true'
                         placeholder={globalize.translate('Search')}
                         autoComplete='off'
-                        maxLength={40}
+                        maxLength={isRegex ? 200 : 40}
                         // eslint-disable-next-line jsx-a11y/no-autofocus
                         autoFocus
                         value={query}
                         onChange={onChange}
                     />
                 </div>
+            </div>
+            <div className='searchFieldsInner flex align-items-center justify-content-center' style={{ marginTop: '0.5em' }}>
+                <label className='flex align-items-center' style={{ cursor: 'pointer', gap: '0.4em' }}>
+                    <input
+                        type='checkbox'
+                        checked={isRegex}
+                        onChange={onRegexToggle}
+                    />
+                    <span>{globalize.translate('LabelUseRegex')}</span>
+                </label>
             </div>
             {layoutManager.tv && !browser.tv
                 && <AlphaPicker onAlphaPicked={onAlphaPicked} />

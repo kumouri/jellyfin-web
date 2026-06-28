@@ -1,3 +1,4 @@
+import escapeHtml from 'escape-html';
 import { PersonKind } from '@jellyfin/sdk/lib/generated-client/models/person-kind';
 
 import dialogHelper from '../dialogHelper/dialogHelper';
@@ -16,7 +17,72 @@ function centerFocus(elem, horiz, on) {
     });
 }
 
-function show(person) {
+// Wires a debounced typeahead onto the name input that suggests existing people (by name or
+// alias) from the server, so users reuse an existing person rather than retyping/misspelling.
+// Picking an existing person fills the exact canonical name (which is how the server links
+// identity, since people are keyed by name+type) and records the matched id on the person.
+function setupNameTypeahead(dlg, person, apiClient) {
+    if (!apiClient) {
+        return;
+    }
+
+    const input = dlg.querySelector('.txtPersonName');
+    const datalist = dlg.querySelector('#personNameSuggestions');
+    if (!input || !datalist) {
+        return;
+    }
+
+    // Lowercased name -> person id, from the most recent suggestions.
+    let suggestions = new Map();
+    let debounceTimer;
+
+    function applyMatchedId() {
+        const id = suggestions.get((input.value || '').trim().toLowerCase());
+        if (id) {
+            person.Id = id;
+        }
+    }
+
+    function query(term) {
+        apiClient.getJSON(apiClient.getUrl('Persons', {
+            searchTerm: term,
+            limit: 20,
+            userId: apiClient.getCurrentUserId()
+        })).then(function (result) {
+            const items = (result && result.Items) || [];
+            suggestions = new Map(items.map(function (i) {
+                return [(i.Name || '').toLowerCase(), i.Id];
+            }));
+            datalist.innerHTML = items.map(function (i) {
+                return `<option value="${escapeHtml(i.Name || '')}"></option>`;
+            }).join('');
+            // The typed value may now exactly match a freshly fetched suggestion.
+            applyMatchedId();
+        }).catch(function () {
+            // Suggestions are best-effort; ignore failures.
+        });
+    }
+
+    input.addEventListener('input', function () {
+        // A manual edit invalidates any previously linked identity until it matches again.
+        person.Id = null;
+        applyMatchedId();
+
+        const term = (input.value || '').trim();
+        clearTimeout(debounceTimer);
+        if (term.length < 2) {
+            datalist.innerHTML = '';
+            suggestions = new Map();
+            return;
+        }
+
+        debounceTimer = setTimeout(function () {
+            query(term);
+        }, 300);
+    });
+}
+
+function show(person, apiClient) {
     return new Promise(function (resolve, reject) {
         const dialogOptions = {
             removeOnClose: true,
@@ -43,6 +109,8 @@ function show(person) {
         dlg.querySelector('.txtPersonName', dlg).value = person.Name || '';
         dlg.querySelector('.selectPersonType', dlg).value = person.Type || '';
         dlg.querySelector('.txtPersonRole', dlg).value = person.Role || '';
+
+        setupNameTypeahead(dlg, person, apiClient);
 
         if (layoutManager.tv) {
             centerFocus(dlg.querySelector('.formDialogContent'), false, true);
