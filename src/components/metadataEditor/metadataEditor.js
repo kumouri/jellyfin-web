@@ -187,6 +187,7 @@ function onSubmit(e) {
 
         item.ProductionLocations = placeOfBirth ? [placeOfBirth] : [];
         item.Aliases = getListValues(form.querySelector('#listAliases'));
+        item.TimedTags = getTimedTagValues(form.querySelector('#timedTagsList'));
     }
 
     if (currentItem.Type === 'Series') {
@@ -210,6 +211,53 @@ function onSubmit(e) {
 function getListValues(list) {
     return Array.prototype.map.call(list.querySelectorAll('.textValue'), function (el) {
         return el.textContent;
+    });
+}
+
+// Timed tags: a repeatable list of { Name, StartDate?, EndDate? } rows for Person items. Dates
+// are optional (blank = always active). Stored via the BaseItemDto.TimedTags field.
+function timedTagRowHtml() {
+    return globalize.translateHtml(`
+        <div class="timedTagRow" style="display:flex;gap:.5em;align-items:flex-end;margin-bottom:.5em;">
+            <div class="inputContainer" style="flex:2;margin-bottom:0;">
+                <input is="emby-input" type="text" class="timedTagName" label="\${LabelTag}" />
+            </div>
+            <div class="inputContainer" style="flex:1;margin-bottom:0;">
+                <input is="emby-input" type="date" class="timedTagStart" label="\${LabelTagStartDate}" />
+            </div>
+            <div class="inputContainer" style="flex:1;margin-bottom:0;">
+                <input is="emby-input" type="date" class="timedTagEnd" label="\${LabelTagEndDate}" />
+            </div>
+            <button type="button" is="paper-icon-button-light" class="btnRemoveTimedTag" title="\${Delete}">
+                <span class="material-icons delete" aria-hidden="true"></span>
+            </button>
+        </div>`);
+}
+
+function addTimedTagRow(container, tag) {
+    container.insertAdjacentHTML('beforeend', timedTagRowHtml());
+    const row = container.lastElementChild;
+    row.querySelector('.timedTagName').value = tag && tag.Name ? tag.Name : '';
+    row.querySelector('.timedTagStart').value = tag && tag.StartDate ? tag.StartDate.slice(0, 10) : '';
+    row.querySelector('.timedTagEnd').value = tag && tag.EndDate ? tag.EndDate.slice(0, 10) : '';
+}
+
+function renderTimedTags(container, tags) {
+    container.innerHTML = '';
+    (tags || []).forEach(function (t) {
+        addTimedTagRow(container, t);
+    });
+}
+
+function getTimedTagValues(container) {
+    return Array.prototype.map.call(container.querySelectorAll('.timedTagRow'), function (row) {
+        return {
+            Name: row.querySelector('.timedTagName').value.trim(),
+            StartDate: row.querySelector('.timedTagStart').value || null,
+            EndDate: row.querySelector('.timedTagEnd').value || null
+        };
+    }).filter(function (t) {
+        return t.Name.length > 0;
     });
 }
 
@@ -319,6 +367,7 @@ function onResetClick() {
     form.querySelector('#listTags').innerHTML = '';
     form.querySelector('#listStudios').innerHTML = '';
     form.querySelector('#listAliases').innerHTML = '';
+    form.querySelector('#timedTagsList').innerHTML = '';
     form.querySelector('#peopleList').innerHTML = '';
     currentItem.People = [];
 
@@ -381,6 +430,20 @@ function init(context) {
 
     context.querySelector('#btnAddPerson').addEventListener('click', function () {
         editPerson(context, {}, -1);
+    });
+
+    context.querySelector('#btnAddTimedTag').addEventListener('click', function () {
+        addTimedTagRow(context.querySelector('#timedTagsList'), null);
+    });
+
+    context.querySelector('#timedTagsList').addEventListener('click', function (e) {
+        const btnRemove = dom.parentWithClass(e.target, 'btnRemoveTimedTag');
+        if (btnRemove) {
+            const row = dom.parentWithClass(btnRemove, 'timedTagRow');
+            if (row) {
+                row.parentNode.removeChild(row);
+            }
+        }
     });
 
     context.querySelector('#peopleList').addEventListener('click', function (e) {
@@ -676,12 +739,17 @@ function setFieldVisibilities(context, item) {
         context.querySelector('#txtEndDate').label(globalize.translate('LabelDeathDate'));
         showElement('#fldPlaceOfBirth');
         showElement('#aliasesCollapsible');
+        // For people, tags carry optional dates, so use the timed-tags editor instead of the
+        // plain tags list.
+        showElement('#timedTagsCollapsible');
+        hideElement('#tagsCollapsible');
     } else {
         context.querySelector('#txtProductionYear').label(globalize.translate('LabelYear'));
         context.querySelector('#txtPremiereDate').label(globalize.translate('LabelReleaseDate'));
         context.querySelector('#txtEndDate').label(globalize.translate('LabelEndDate'));
         hideElement('#fldPlaceOfBirth');
         hideElement('#aliasesCollapsible');
+        hideElement('#timedTagsCollapsible');
     }
 
     if (item.MediaType === 'Video' && item.Type === 'TvChannel') {
@@ -787,6 +855,7 @@ function fillItemInfo(context, item, parentalRatingOptions) {
 
     populateListView(context.querySelector('#listTags'), item.Tags);
     populateListView(context.querySelector('#listAliases'), item.Aliases || []);
+    renderTimedTags(context.querySelector('#timedTagsList'), item.TimedTags || []);
 
     const lockData = (item.LockData || false);
     const chkLockData = context.querySelector('#chkLockData');
